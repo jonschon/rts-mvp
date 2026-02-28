@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RTS MVP</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background: #10161d;
+        color: #e7eef7;
+      }
+
+      .app {
+        min-height: 100vh;
+        padding: 16px;
+        display: grid;
+        place-items: center;
+      }
+
+      .panel {
+        width: min(980px, 100%);
+        background: #182230;
+        border: 1px solid #2d4259;
+        border-radius: 10px;
+        padding: 12px;
+      }
+
+      .hud {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .hud-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      label {
+        font-size: 14px;
+      }
+
+      select,
+      button {
+        border: 1px solid #476888;
+        border-radius: 6px;
+        background: #223348;
+        color: #e7eef7;
+        padding: 8px 10px;
+        font-size: 14px;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:disabled,
+      select:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      #status {
+        min-height: 24px;
+        margin: 0;
+        color: #ffc857;
+        font-weight: 600;
+      }
+
+      #game {
+        width: 100%;
+        height: auto;
+        border: 1px solid #35506b;
+        border-radius: 8px;
+        background: #0e1a27;
+        display: block;
+      }
+
+      .hint {
+        margin: 10px 0 0;
+        color: #b6cbe0;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel">
+        <div class="hud">
+          <div class="hud-group">
+            <label for="difficulty">Difficulty</label>
+            <select id="difficulty">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+          <div class="hud-group">
+            <button id="spawn" type="button">Spawn Unit (50)</button>
+            <button id="restart" type="button">Restart</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="hud-group">
+            <strong>Resources:</strong>
+            <span id="resources">0</span>
+          </div>
+        </div>
+        <p id="status"></p>
+        <canvas id="game" width="900" height="540" aria-label="RTS battlefield"></canvas>
+        <p class="hint">Units auto-move to enemy HQ. Spawn enough units before the AI overwhelms you.</p>
+      </section>
+    </main>
+
+    <script>
+      const CANVAS_WIDTH = 900;
+      const CANVAS_HEIGHT = 540;
+      const PLAYER_SPAWN_COST = 50;
+      const INCOME_TICK_MS = 1000;
+      const BASE_COLLISION_RADIUS = 42;
+
+      const DIFFICULTIES = {
+        easy: {
+          name: "easy",
+          aiSpawnMs: 2600,
+          aiUnitHp: 18,
+          aiUnitDamage: 4,
+          incomePerSec: 10,
+        },
+        medium: {
+          name: "medium",
+          aiSpawnMs: 1800,
+          aiUnitHp: 24,
+          aiUnitDamage: 6,
+          incomePerSec: 10,
+        },
+        advanced: {
+          name: "advanced",
+          aiSpawnMs: 1200,
+          aiUnitHp: 30,
+          aiUnitDamage: 8,
+          incomePerSec: 12,
+        },
+      };
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const resourcesEl = document.getElementById("resources");
+      const statusEl = document.getElementById("status");
+      const spawnButton = document.getElementById("spawn");
+      const restartButton = document.getElementById("restart");
+      const difficultySelect = document.getElementById("difficulty");
+
+      let nextUnitId = 1;
+      let gameState = createInitialState();
+
+      function createBase(x, y) {
+        return {
+          x,
+          y,
+          hp: 400,
+          maxHp: 400,
+        };
+      }
+
+      function createInitialState() {
+        const difficulty = DIFFICULTIES[difficultySelect.value] || DIFFICULTIES.medium;
+        nextUnitId = 1;
+        return {
+          running: true,
+          result: null,
+          difficulty,
+          playerResources: 100,
+          aiResources: 100,
+          playerBase: createBase(110, CANVAS_HEIGHT / 2),
+          aiBase: createBase(CANVAS_WIDTH - 110, CANVAS_HEIGHT / 2),
+          units: [],
+          timers: {
+            aiSpawn: 0,
+            income: 0,
+          },
+        };
+      }
+
+      function createUnit(team, state) {
+        const isPlayer = team === "player";
+        const base = isPlayer ? state.playerBase : state.aiBase;
+        const difficulty = state.difficulty;
+        return {
+          id: nextUnitId++,
+          team,
+          x: base.x + (isPlayer ? 34 : -34),
+          y: base.y + (Math.random() * 36 - 18),
+          hp: isPlayer ? 24 : difficulty.aiUnitHp,
+          damage: isPlayer ? 7 : difficulty.aiUnitDamage,
+          speed: isPlayer ? 96 : 92,
+          target: isPlayer ? "aiBase" : "playerBase",
+          radius: 7,
+        };
+      }
+
+      function distance(a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        return Math.hypot(dx, dy);
+      }
+
+      function spawnPlayerUnit() {
+        if (!gameState.running) {
+          return;
+        }
+        if (gameState.playerResources < PLAYER_SPAWN_COST) {
+          setStatus("Not enough resources to spawn.");
+          return;
+        }
+        gameState.playerResources -= PLAYER_SPAWN_COST;
+        gameState.units.push(createUnit("player", gameState));
+      }
+
+      function spawnAiUnit() {
+        const aiCost = PLAYER_SPAWN_COST;
+        if (gameState.aiResources < aiCost) {
+          return;
+        }
+        gameState.aiResources -= aiCost;
+        gameState.units.push(createUnit("ai", gameState));
+      }
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function endGame(result) {
+        gameState.running = false;
+        gameState.result = result;
+        if (result === "victory") {
+          setStatus("Victory! Enemy HQ destroyed.");
+        } else {
+          setStatus("Defeat. Your HQ was destroyed.");
+        }
+      }
+
+      function update(dtMs) {
+        if (!gameState.running) {
+          return;
+        }
+
+        gameState.timers.income += dtMs;
+        gameState.timers.aiSpawn += dtMs;
+
+        while (gameState.timers.income >= INCOME_TICK_MS) {
+          gameState.playerResources += 10;
+          gameState.aiResources += gameState.difficulty.incomePerSec;
+          gameState.timers.income -= INCOME_TICK_MS;
+        }
+
+        while (gameState.timers.aiSpawn >= gameState.difficulty.aiSpawnMs) {
+          spawnAiUnit();
+          gameState.timers.aiSpawn -= gameState.difficulty.aiSpawnMs;
+        }
+
+        const dt = dtMs / 1000;
+        const remaining = [];
+
+        for (const unit of gameState.units) {
+          const targetBase = unit.target === "aiBase" ? gameState.aiBase : gameState.playerBase;
+          const dist = distance(unit, targetBase);
+
+          if (dist <= BASE_COLLISION_RADIUS) {
+            targetBase.hp -= unit.damage;
+          } else {
+            const dx = targetBase.x - unit.x;
+            const dy = targetBase.y - unit.y;
+            const step = unit.speed * dt;
+            const nx = dx / (dist || 1);
+            const ny = dy / (dist || 1);
+            unit.x += nx * step;
+            unit.y += ny * step;
+            remaining.push(unit);
+          }
+        }
+
+        gameState.units = remaining;
+
+        if (gameState.aiBase.hp <= 0) {
+          gameState.aiBase.hp = 0;
+          endGame("victory");
+        } else if (gameState.playerBase.hp <= 0) {
+          gameState.playerBase.hp = 0;
+          endGame("defeat");
+        }
+      }
+
+      function drawBase(base, color, name) {
+        const width = 60;
+        const height = 60;
+        ctx.fillStyle = color;
+        ctx.fillRect(base.x - width / 2, base.y - height / 2, width, height);
+
+        ctx.fillStyle = "#d9e8f5";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(name, base.x, base.y - 40);
+
+        const barWidth = 70;
+        const hpPct = Math.max(0, base.hp / base.maxHp);
+        ctx.fillStyle = "#3b4a5a";
+        ctx.fillRect(base.x - barWidth / 2, base.y + 40, barWidth, 7);
+        ctx.fillStyle = "#58d68d";
+        ctx.fillRect(base.x - barWidth / 2, base.y + 40, barWidth * hpPct, 7);
+      }
+
+      function drawUnits(units) {
+        for (const unit of units) {
+          ctx.beginPath();
+          ctx.fillStyle = unit.team === "player" ? "#5dade2" : "#ec7063";
+          ctx.arc(unit.x, unit.y, unit.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillStyle = "#142638";
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        ctx.strokeStyle = "rgba(200, 220, 240, 0.08)";
+        for (let x = 0; x <= CANVAS_WIDTH; x += 45) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, CANVAS_HEIGHT);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= CANVAS_HEIGHT; y += 45) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(CANVAS_WIDTH, y);
+          ctx.stroke();
+        }
+      }
+
+      function render() {
+        drawBackground();
+        drawBase(gameState.playerBase, "#2e86c1", "Your HQ");
+        drawBase(gameState.aiBase, "#cb4335", "Enemy HQ");
+        drawUnits(gameState.units);
+
+        resourcesEl.textContent = gameState.playerResources;
+        spawnButton.disabled = !gameState.running;
+        difficultySelect.disabled = !gameState.running;
+      }
+
+      let previous = performance.now();
+      function loop(now) {
+        const dtMs = Math.min(50, now - previous);
+        previous = now;
+        update(dtMs);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      spawnButton.addEventListener("click", spawnPlayerUnit);
+
+      restartButton.addEventListener("click", () => {
+        gameState = createInitialState();
+        setStatus("");
+      });
+
+      difficultySelect.addEventListener("change", () => {
+        gameState.difficulty = DIFFICULTIES[difficultySelect.value] || DIFFICULTIES.medium;
+      });
+
+      setStatus("Build units and destroy the enemy HQ.");
+      requestAnimationFrame((now) => {
+        previous = now;
+        requestAnimationFrame(loop);
+      });
+    </script>
+  </body>
+</html>
