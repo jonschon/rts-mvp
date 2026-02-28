@@ -1,41 +1,60 @@
-# RTS MVP (Browser)
+# City Theater RTS MVP (Browser)
 
-A minimal single-player RTS-style prototype built with one `index.html` file (Canvas + vanilla JS).
+Original browser RTS MVP inspired by classic base-vs-base strategy games.
+Built as a single `index.html` file (Canvas + vanilla JS) for easy static hosting.
 
-## Local Run
+## Play Locally
 
-1. Open `index.html` directly in your browser.
-2. Pick difficulty (`easy`, `medium`, `advanced`).
-3. Click **Spawn Unit (50)** to attack the enemy HQ.
+1. Open `index.html` in your browser.
+2. Choose a city theater and difficulty.
+3. Build mixed forces: `Harvester`, `Soldier`, `Tank`, `Helicopter`, and `Patrol Boat` (coastal maps).
+4. Select one unit or a group and issue commands.
+
+## Controls
+
+- Left click unit: single select
+- Shift + left click unit: add/remove from current selection
+- Left-click drag box: select multiple units
+- Left click or right click map/node/enemy HQ: command selected group
+- `Restart`: reset match with selected city/difficulty
+
+## Gameplay Loop
+
+- Two resources: `water` and `materials`
+- Harvesters gather from resource nodes and return cargo to HQ
+- Army branch: `Soldier`, `Tank`
+- Air Force branch: `Helicopter`
+- Navy branch: `Patrol Boat` (available on coastal theaters)
+- Combat units engage enemy units/base automatically in range
+- Destroy the enemy HQ to win
+
+## City Theaters
+
+- Miami Coast
+- Phoenix Basin
+- Seattle Port
+
+Each city has a unique resource-node distribution and visual theme.
 
 ## Deploy to GitHub Pages
 
-1. Create a new public GitHub repo (for example `rts-mvp`).
-2. From this folder, run:
-
 ```bash
-git init
 git add index.html README.md
-git commit -m "Initial RTS MVP"
-git branch -M main
-git remote add origin https://github.com/<your-username>/rts-mvp.git
-git push -u origin main
+git commit -m "City theater RTS MVP"
+git push origin main
 ```
 
-3. In GitHub, open the repo settings:
+In GitHub repo settings:
 - `Settings` -> `Pages`
 - `Source`: **Deploy from a branch**
-- `Branch`: **main** and folder **/(root)**
-- Save
+- Branch: **main** / **(root)**
 
-4. Wait for deployment, then open:
-
+Site URL pattern:
 `https://<your-username>.github.io/rts-mvp/`
 
-## MVP Features
+## Legal/Attribution
 
-- One map, two HQ bases
-- Resource income over time
-- One unit type
-- AI spawn pressure scales by difficulty
-- Victory/defeat + restart flow
+- Original game inspired by RTS genre conventions
+- Not affiliated with Command & Conquer
+- No Google Maps imagery or tiles used
+- City layouts are handcrafted schematics with OSM-style public-geography influence

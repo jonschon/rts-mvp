@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RTS MVP</title>
+    <title>City Theater RTS MVP</title>
     <style>
       * {
         box-sizing: border-box;
@@ -12,21 +12,21 @@
       body {
         margin: 0;
         font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-        background: #10161d;
-        color: #e7eef7;
+        background: #0f141a;
+        color: #e8eef5;
       }
 
       .app {
         min-height: 100vh;
-        padding: 16px;
+        padding: 14px;
         display: grid;
         place-items: center;
       }
 
       .panel {
-        width: min(980px, 100%);
-        background: #182230;
-        border: 1px solid #2d4259;
+        width: min(1080px, 100%);
+        background: #16212d;
+        border: 1px solid #2f4358;
         border-radius: 10px;
         padding: 12px;
       }
@@ -36,13 +36,13 @@
         flex-wrap: wrap;
         align-items: center;
         gap: 8px;
-        margin-bottom: 10px;
       }
 
-      .hud-group {
+      .group {
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-wrap: wrap;
       }
 
       .spacer {
@@ -50,17 +50,17 @@
       }
 
       label {
-        font-size: 14px;
+        font-size: 13px;
       }
 
       select,
       button {
-        border: 1px solid #476888;
+        border: 1px solid #4d6a87;
         border-radius: 6px;
-        background: #223348;
-        color: #e7eef7;
-        padding: 8px 10px;
-        font-size: 14px;
+        background: #243649;
+        color: #e8eef5;
+        padding: 7px 10px;
+        font-size: 13px;
       }
 
       button {
@@ -69,15 +69,30 @@
 
       button:disabled,
       select:disabled {
-        cursor: not-allowed;
         opacity: 0.65;
+        cursor: not-allowed;
       }
 
-      #status {
-        min-height: 24px;
-        margin: 0;
-        color: #ffc857;
+      .stats {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 14px;
+      }
+
+      .status {
+        min-height: 21px;
+        margin: 8px 0;
+        color: #ffd166;
         font-weight: 600;
+        font-size: 14px;
+      }
+
+      .help {
+        margin: 0 0 8px;
+        color: #b7c8da;
+        font-size: 13px;
       }
 
       #game {
@@ -85,14 +100,14 @@
         height: auto;
         border: 1px solid #35506b;
         border-radius: 8px;
-        background: #0e1a27;
         display: block;
       }
 
-      .hint {
+      .legal {
         margin: 10px 0 0;
-        color: #b6cbe0;
-        font-size: 13px;
+        font-size: 12px;
+        color: #9db1c7;
+        line-height: 1.4;
       }
     </style>
   </head>
@@ -100,7 +115,15 @@
     <main class="app">
       <section class="panel">
         <div class="hud">
-          <div class="hud-group">
+          <div class="group">
+            <label for="city">City Theater</label>
+            <select id="city">
+              <option value="miami">Miami Coast</option>
+              <option value="phoenix">Phoenix Basin</option>
+              <option value="seattle">Seattle Port</option>
+            </select>
+          </div>
+          <div class="group">
             <label for="difficulty">Difficulty</label>
             <select id="difficulty">
               <option value="easy">Easy</option>
@@ -108,283 +131,1033 @@
               <option value="advanced">Advanced</option>
             </select>
           </div>
-          <div class="hud-group">
-            <button id="spawn" type="button">Spawn Unit (50)</button>
+          <div class="group">
+            <button id="spawnHarvester" type="button">Harvester (W20/M30)</button>
+            <button id="spawnSoldier" type="button">Soldier (W15/M35)</button>
+            <button id="spawnTank" type="button">Tank (W25/M70)</button>
+            <button id="spawnHelicopter" type="button">Helicopter (W80/M45)</button>
+            <button id="spawnBoat" type="button">Patrol Boat (W65/M55)</button>
             <button id="restart" type="button">Restart</button>
           </div>
           <div class="spacer"></div>
-          <div class="hud-group">
-            <strong>Resources:</strong>
-            <span id="resources">0</span>
-          </div>
         </div>
-        <p id="status"></p>
-        <canvas id="game" width="900" height="540" aria-label="RTS battlefield"></canvas>
-        <p class="hint">Units auto-move to enemy HQ. Spawn enough units before the AI overwhelms you.</p>
+
+        <div class="stats">
+          <span><strong>Water:</strong> <span id="water">0</span></span>
+          <span><strong>Materials:</strong> <span id="materials">0</span></span>
+          <span><strong>Your HQ:</strong> <span id="playerHp">0</span></span>
+          <span><strong>Enemy HQ:</strong> <span id="aiHp">0</span></span>
+          <span><strong>Army:</strong> <span id="armyCount">0</span></span>
+          <span><strong>Air:</strong> <span id="airCount">0</span></span>
+          <span><strong>Navy:</strong> <span id="navyCount">0</span></span>
+        </div>
+
+        <p id="status" class="status"></p>
+        <p class="help">Controls: Drag left-click to box-select multiple units. Shift+click adds/removes. Left/right click to command selected group.</p>
+        <canvas id="game" width="960" height="560" aria-label="City theater battlefield"></canvas>
+        <p class="legal">
+          Original game inspired by the RTS genre; not affiliated with Command &amp; Conquer. City layouts are handcrafted schematics inspired by public geographic patterns.
+          OSM-style influence only; no Google Maps imagery or tiles used.
+        </p>
       </section>
     </main>
 
     <script>
-      const CANVAS_WIDTH = 900;
-      const CANVAS_HEIGHT = 540;
-      const PLAYER_SPAWN_COST = 50;
+      const WIDTH = 960;
+      const HEIGHT = 560;
+      const BASE_RADIUS = 40;
       const INCOME_TICK_MS = 1000;
-      const BASE_COLLISION_RADIUS = 42;
+
+      const COSTS = {
+        harvester: { water: 20, materials: 30 },
+        soldier: { water: 15, materials: 35 },
+        tank: { water: 25, materials: 70 },
+        helicopter: { water: 80, materials: 45 },
+        patrolBoat: { water: 65, materials: 55 },
+      };
+
+      const UNIT_DEFS = {
+        harvester: {
+          hp: 70,
+          speed: 72,
+          radius: 7,
+          role: "support",
+          domain: "ground",
+          damagePerSec: 0,
+          range: 0,
+          canHitAir: false,
+          colorPlayer: "#7ed6a7",
+          colorAI: "#93c67f",
+        },
+        soldier: {
+          hp: 90,
+          speed: 88,
+          radius: 7,
+          role: "army",
+          domain: "ground",
+          damagePerSec: 15,
+          range: 80,
+          canHitAir: false,
+          colorPlayer: "#59a8f3",
+          colorAI: "#ef6f6f",
+        },
+        tank: {
+          hp: 210,
+          speed: 62,
+          radius: 9,
+          role: "army",
+          domain: "ground",
+          damagePerSec: 32,
+          range: 95,
+          canHitAir: false,
+          colorPlayer: "#4b88d8",
+          colorAI: "#d05f52",
+        },
+        helicopter: {
+          hp: 125,
+          speed: 125,
+          radius: 8,
+          role: "airforce",
+          domain: "air",
+          damagePerSec: 20,
+          range: 125,
+          canHitAir: true,
+          colorPlayer: "#8bc5ff",
+          colorAI: "#ff9ca6",
+        },
+        patrolBoat: {
+          hp: 165,
+          speed: 82,
+          radius: 9,
+          role: "navy",
+          domain: "sea",
+          damagePerSec: 22,
+          range: 115,
+          canHitAir: false,
+          colorPlayer: "#4ed0d9",
+          colorAI: "#d47777",
+        },
+      };
 
       const DIFFICULTIES = {
-        easy: {
-          name: "easy",
-          aiSpawnMs: 2600,
-          aiUnitHp: 18,
-          aiUnitDamage: 4,
-          incomePerSec: 10,
+        easy: { aiThinkMs: 1500, aiAttackMs: 6200, aiIncomeBonus: 4, aiStartHarvesters: 1 },
+        medium: { aiThinkMs: 1100, aiAttackMs: 4300, aiIncomeBonus: 7, aiStartHarvesters: 2 },
+        advanced: { aiThinkMs: 800, aiAttackMs: 3000, aiIncomeBonus: 10, aiStartHarvesters: 3 },
+      };
+
+      const CITIES = {
+        miami: {
+          id: "miami",
+          label: "Miami Coast",
+          theme: { bg: "#163247", grid: "rgba(203,232,255,0.10)", coast: "#2d8ec7" },
+          playerBasePos: { x: 110, y: 300 },
+          aiBasePos: { x: 850, y: 260 },
+          navalBandYMax: 130,
+          navalSpawn: { player: { x: 100, y: 95 }, ai: { x: 860, y: 95 } },
+          resourceNodes: [
+            { id: "m-w1", type: "water", x: 250, y: 110, capacity: 300, regenPerSec: 2 },
+            { id: "m-w2", type: "water", x: 400, y: 80, capacity: 280, regenPerSec: 2 },
+            { id: "m-w3", type: "water", x: 600, y: 120, capacity: 320, regenPerSec: 2 },
+            { id: "m-m1", type: "materials", x: 320, y: 390, capacity: 340, regenPerSec: 1 },
+            { id: "m-m2", type: "materials", x: 520, y: 420, capacity: 340, regenPerSec: 1 },
+            { id: "m-m3", type: "materials", x: 700, y: 360, capacity: 340, regenPerSec: 1 },
+          ],
+          overlays: [{ kind: "coast", points: [{ x: 0, y: 45 }, { x: WIDTH, y: 105 }, { x: WIDTH, y: 0 }, { x: 0, y: 0 }] }],
         },
-        medium: {
-          name: "medium",
-          aiSpawnMs: 1800,
-          aiUnitHp: 24,
-          aiUnitDamage: 6,
-          incomePerSec: 10,
+        phoenix: {
+          id: "phoenix",
+          label: "Phoenix Basin",
+          theme: { bg: "#4a3522", grid: "rgba(249,224,167,0.11)", coast: "#6f5237" },
+          playerBasePos: { x: 130, y: 280 },
+          aiBasePos: { x: 830, y: 285 },
+          navalBandYMax: null,
+          navalSpawn: null,
+          resourceNodes: [
+            { id: "p-w1", type: "water", x: 260, y: 230, capacity: 220, regenPerSec: 1.2 },
+            { id: "p-w2", type: "water", x: 520, y: 190, capacity: 220, regenPerSec: 1.2 },
+            { id: "p-w3", type: "water", x: 720, y: 220, capacity: 220, regenPerSec: 1.2 },
+            { id: "p-m1", type: "materials", x: 330, y: 420, capacity: 420, regenPerSec: 1.5 },
+            { id: "p-m2", type: "materials", x: 500, y: 370, capacity: 420, regenPerSec: 1.5 },
+            { id: "p-m3", type: "materials", x: 670, y: 410, capacity: 420, regenPerSec: 1.5 },
+          ],
+          overlays: [],
         },
-        advanced: {
-          name: "advanced",
-          aiSpawnMs: 1200,
-          aiUnitHp: 30,
-          aiUnitDamage: 8,
-          incomePerSec: 12,
+        seattle: {
+          id: "seattle",
+          label: "Seattle Port",
+          theme: { bg: "#253a31", grid: "rgba(204,240,223,0.10)", coast: "#45856e" },
+          playerBasePos: { x: 120, y: 320 },
+          aiBasePos: { x: 840, y: 220 },
+          navalBandYMax: 140,
+          navalSpawn: { player: { x: 105, y: 100 }, ai: { x: 860, y: 100 } },
+          resourceNodes: [
+            { id: "s-w1", type: "water", x: 220, y: 100, capacity: 300, regenPerSec: 2 },
+            { id: "s-w2", type: "water", x: 420, y: 130, capacity: 300, regenPerSec: 2 },
+            { id: "s-w3", type: "water", x: 640, y: 100, capacity: 300, regenPerSec: 2 },
+            { id: "s-m1", type: "materials", x: 320, y: 360, capacity: 350, regenPerSec: 1.2 },
+            { id: "s-m2", type: "materials", x: 550, y: 320, capacity: 350, regenPerSec: 1.2 },
+            { id: "s-m3", type: "materials", x: 740, y: 360, capacity: 350, regenPerSec: 1.2 },
+          ],
+          overlays: [{ kind: "coast", points: [{ x: 0, y: 70 }, { x: WIDTH, y: 70 }, { x: WIDTH, y: 0 }, { x: 0, y: 0 }] }],
         },
       };
 
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
-      const resourcesEl = document.getElementById("resources");
+      const cityEl = document.getElementById("city");
+      const difficultyEl = document.getElementById("difficulty");
+      const spawnHarvesterEl = document.getElementById("spawnHarvester");
+      const spawnSoldierEl = document.getElementById("spawnSoldier");
+      const spawnTankEl = document.getElementById("spawnTank");
+      const spawnHelicopterEl = document.getElementById("spawnHelicopter");
+      const spawnBoatEl = document.getElementById("spawnBoat");
+      const restartEl = document.getElementById("restart");
       const statusEl = document.getElementById("status");
-      const spawnButton = document.getElementById("spawn");
-      const restartButton = document.getElementById("restart");
-      const difficultySelect = document.getElementById("difficulty");
+      const waterEl = document.getElementById("water");
+      const materialsEl = document.getElementById("materials");
+      const playerHpEl = document.getElementById("playerHp");
+      const aiHpEl = document.getElementById("aiHp");
+      const armyCountEl = document.getElementById("armyCount");
+      const airCountEl = document.getElementById("airCount");
+      const navyCountEl = document.getElementById("navyCount");
 
       let nextUnitId = 1;
-      let gameState = createInitialState();
+      let gameState = null;
+      let frameDtMs = 16;
+      const dragSelect = {
+        active: false,
+        startX: 0,
+        startY: 0,
+        currentX: 0,
+        currentY: 0,
+        moved: false,
+        clickedUnitId: null,
+      };
 
-      function createBase(x, y) {
+      function cloneNode(node) {
         return {
-          x,
-          y,
-          hp: 400,
-          maxHp: 400,
+          id: node.id,
+          type: node.type,
+          x: node.x,
+          y: node.y,
+          capacity: node.capacity,
+          current: node.capacity,
+          regenPerSec: node.regenPerSec,
         };
       }
 
-      function createInitialState() {
-        const difficulty = DIFFICULTIES[difficultySelect.value] || DIFFICULTIES.medium;
+      function createBase(position) {
+        return { x: position.x, y: position.y, hp: 900, maxHp: 900 };
+      }
+
+      function createState() {
+        const city = CITIES[cityEl.value] || CITIES.miami;
+        const difficulty = difficultyEl.value in DIFFICULTIES ? difficultyEl.value : "medium";
         nextUnitId = 1;
-        return {
+
+        const state = {
           running: true,
           result: null,
           difficulty,
-          playerResources: 100,
-          aiResources: 100,
-          playerBase: createBase(110, CANVAS_HEIGHT / 2),
-          aiBase: createBase(CANVAS_WIDTH - 110, CANVAS_HEIGHT / 2),
+          city,
+          playerEconomy: { water: 130, materials: 130 },
+          aiEconomy: { water: 140, materials: 140 },
+          playerBase: createBase(city.playerBasePos),
+          aiBase: createBase(city.aiBasePos),
           units: [],
-          timers: {
-            aiSpawn: 0,
-            income: 0,
-          },
+          selectedUnitIds: [],
+          timers: { income: 0, aiThink: 0, aiAttack: 0 },
+          nodes: city.resourceNodes.map(cloneNode),
         };
-      }
 
-      function createUnit(team, state) {
-        const isPlayer = team === "player";
-        const base = isPlayer ? state.playerBase : state.aiBase;
-        const difficulty = state.difficulty;
-        return {
-          id: nextUnitId++,
-          team,
-          x: base.x + (isPlayer ? 34 : -34),
-          y: base.y + (Math.random() * 36 - 18),
-          hp: isPlayer ? 24 : difficulty.aiUnitHp,
-          damage: isPlayer ? 7 : difficulty.aiUnitDamage,
-          speed: isPlayer ? 96 : 92,
-          target: isPlayer ? "aiBase" : "playerBase",
-          radius: 7,
-        };
-      }
-
-      function distance(a, b) {
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        return Math.hypot(dx, dy);
-      }
-
-      function spawnPlayerUnit() {
-        if (!gameState.running) {
-          return;
+        const aiStart = DIFFICULTIES[difficulty].aiStartHarvesters;
+        for (let i = 0; i < aiStart; i += 1) {
+          spawnUnit("ai", "harvester", state);
         }
-        if (gameState.playerResources < PLAYER_SPAWN_COST) {
-          setStatus("Not enough resources to spawn.");
-          return;
-        }
-        gameState.playerResources -= PLAYER_SPAWN_COST;
-        gameState.units.push(createUnit("player", gameState));
-      }
 
-      function spawnAiUnit() {
-        const aiCost = PLAYER_SPAWN_COST;
-        if (gameState.aiResources < aiCost) {
-          return;
-        }
-        gameState.aiResources -= aiCost;
-        gameState.units.push(createUnit("ai", gameState));
+        return state;
       }
 
       function setStatus(message) {
         statusEl.textContent = message;
       }
 
-      function endGame(result) {
-        gameState.running = false;
-        gameState.result = result;
-        if (result === "victory") {
-          setStatus("Victory! Enemy HQ destroyed.");
+      function distance(ax, ay, bx, by) {
+        return Math.hypot(bx - ax, by - ay);
+      }
+
+      function canAfford(economy, cost) {
+        return economy.water >= cost.water && economy.materials >= cost.materials;
+      }
+
+      function spend(economy, cost) {
+        economy.water -= cost.water;
+        economy.materials -= cost.materials;
+      }
+
+      function getSeaBandYMax(state = gameState) {
+        return state.city.navalBandYMax;
+      }
+
+      function citySupportsNavy(state = gameState) {
+        return Number.isFinite(getSeaBandYMax(state));
+      }
+
+      function clampSeaY(state, y) {
+        const yMax = getSeaBandYMax(state);
+        if (!Number.isFinite(yMax)) {
+          return y;
+        }
+        return Math.min(y, yMax);
+      }
+
+      function getUnitSpawnPoint(team, kind, state) {
+        if (kind === "patrolBoat" && citySupportsNavy(state)) {
+          return team === "player" ? state.city.navalSpawn.player : state.city.navalSpawn.ai;
+        }
+        return team === "player" ? state.playerBase : state.aiBase;
+      }
+
+      function spawnUnit(team, kind, state = gameState) {
+        const def = UNIT_DEFS[kind];
+        const spawnPoint = getUnitSpawnPoint(team, kind, state);
+        const angle = Math.random() * Math.PI * 2;
+        const spawnDistance = 24;
+
+        const unit = {
+          id: nextUnitId++,
+          team,
+          kind,
+          x: spawnPoint.x + Math.cos(angle) * spawnDistance,
+          y: spawnPoint.y + Math.sin(angle) * spawnDistance,
+          hp: def.hp,
+          speed: def.speed,
+          radius: def.radius,
+          role: def.role,
+          domain: def.domain,
+          damagePerSec: def.damagePerSec,
+          range: def.range,
+          canHitAir: def.canHitAir,
+          cargo: { water: 0, materials: 0 },
+          state: "idle",
+          moveTarget: null,
+          targetId: null,
+          attackTargetId: null,
+        };
+
+        if (unit.domain === "sea") {
+          unit.y = clampSeaY(state, unit.y);
+        }
+
+        state.units.push(unit);
+        return unit;
+      }
+
+      function getNodeById(id, state = gameState) {
+        return state.nodes.find((node) => node.id === id) || null;
+      }
+
+      function getUnitById(id, state = gameState) {
+        return state.units.find((unit) => unit.id === id) || null;
+      }
+
+      function moveTowards(unit, targetX, targetY, dt, state = gameState) {
+        if (unit.domain === "sea") {
+          targetY = clampSeaY(state, targetY);
+        }
+
+        const dist = distance(unit.x, unit.y, targetX, targetY);
+        if (dist <= 0.0001) {
+          return true;
+        }
+
+        const step = unit.speed * dt;
+        if (dist <= step) {
+          unit.x = targetX;
+          unit.y = targetY;
+          return true;
+        }
+
+        unit.x += ((targetX - unit.x) / dist) * step;
+        unit.y += ((targetY - unit.y) / dist) * step;
+        if (unit.domain === "sea") {
+          unit.y = clampSeaY(state, unit.y);
+        }
+        return false;
+      }
+
+      function canAttackTarget(attacker, target) {
+        if (!attacker || !target || attacker.team === target.team) {
+          return false;
+        }
+        if (target.kind === "harvester" || target.domain === "ground" || target.domain === "sea") {
+          return true;
+        }
+        return attacker.canHitAir;
+      }
+
+      function toWorldPosition(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: ((event.clientX - rect.left) / rect.width) * WIDTH,
+          y: ((event.clientY - rect.top) / rect.height) * HEIGHT,
+        };
+      }
+
+      function getSelectedUnits() {
+        if (!Array.isArray(gameState.selectedUnitIds) || gameState.selectedUnitIds.length === 0) {
+          return [];
+        }
+        const selected = gameState.selectedUnitIds
+          .map((id) => getUnitById(id))
+          .filter((unit) => unit && unit.team === "player");
+        gameState.selectedUnitIds = selected.map((unit) => unit.id);
+        return selected;
+      }
+
+      function toggleSelectedUnit(unitId) {
+        if (!Array.isArray(gameState.selectedUnitIds)) {
+          gameState.selectedUnitIds = [];
+        }
+        if (gameState.selectedUnitIds.includes(unitId)) {
+          gameState.selectedUnitIds = gameState.selectedUnitIds.filter((id) => id !== unitId);
         } else {
-          setStatus("Defeat. Your HQ was destroyed.");
+          gameState.selectedUnitIds.push(unitId);
+        }
+      }
+
+      function issueCommandToUnit(unit, x, y) {
+        if (!unit || unit.team !== "player" || !gameState.running) {
+          return;
+        }
+
+        const clickedNode = gameState.nodes.find((node) => distance(x, y, node.x, node.y) <= 16);
+        if (unit.kind === "harvester" && clickedNode) {
+          unit.targetId = clickedNode.id;
+          unit.moveTarget = { x: clickedNode.x, y: clickedNode.y };
+          unit.state = "move";
+          return;
+        }
+
+        const enemyBase = gameState.aiBase;
+        const clickedEnemyBase = distance(x, y, enemyBase.x, enemyBase.y) <= BASE_RADIUS + 20;
+        if (unit.kind !== "harvester" && clickedEnemyBase) {
+          unit.state = "attack";
+          unit.attackTargetId = "enemy-base";
+          unit.moveTarget = null;
+          return;
+        }
+
+        unit.attackTargetId = null;
+        unit.state = "move";
+        unit.moveTarget = { x, y };
+      }
+
+      function issueCommandToSelection(units, x, y) {
+        if (!units.length) {
+          setStatus("Select one or more units first.");
+          return;
+        }
+
+        const spacing = 20;
+        const cols = Math.ceil(Math.sqrt(units.length));
+        const centered = (cols - 1) / 2;
+        let commandedHarvesters = 0;
+        let commandedCombat = 0;
+
+        units.forEach((unit, index) => {
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          const targetX = x + (col - centered) * spacing;
+          const targetY = y + (row - centered) * spacing;
+          issueCommandToUnit(unit, targetX, targetY);
+          if (unit.kind === "harvester") {
+            commandedHarvesters += 1;
+          } else {
+            commandedCombat += 1;
+          }
+        });
+
+        if (commandedHarvesters && commandedCombat) {
+          setStatus("Mixed group command issued.");
+        } else if (commandedHarvesters) {
+          setStatus("Harvester group command issued.");
+        } else {
+          setStatus("Combat group command issued.");
+        }
+      }
+
+      function applyBoxSelection(additive) {
+        const minX = Math.min(dragSelect.startX, dragSelect.currentX);
+        const maxX = Math.max(dragSelect.startX, dragSelect.currentX);
+        const minY = Math.min(dragSelect.startY, dragSelect.currentY);
+        const maxY = Math.max(dragSelect.startY, dragSelect.currentY);
+
+        const idsInBox = gameState.units
+          .filter((unit) => unit.team === "player" && unit.x >= minX && unit.x <= maxX && unit.y >= minY && unit.y <= maxY)
+          .map((unit) => unit.id);
+
+        if (!additive) {
+          gameState.selectedUnitIds = idsInBox;
+        } else {
+          const set = new Set(gameState.selectedUnitIds);
+          for (const id of idsInBox) {
+            set.add(id);
+          }
+          gameState.selectedUnitIds = [...set];
+        }
+
+        if (gameState.selectedUnitIds.length > 0) {
+          setStatus(gameState.selectedUnitIds.length + " units selected.");
+        } else {
+          setStatus("No units selected.");
+        }
+      }
+
+      function handleCanvasMouseDown(event) {
+        const pos = toWorldPosition(event);
+
+        if (event.button === 2) {
+          event.preventDefault();
+          issueCommandToSelection(getSelectedUnits(), pos.x, pos.y);
+          return;
+        }
+
+        if (event.button !== 0 || !gameState.running) {
+          return;
+        }
+
+        const clickedPlayerUnit = gameState.units.find(
+          (unit) => unit.team === "player" && distance(pos.x, pos.y, unit.x, unit.y) <= unit.radius + 5
+        );
+
+        dragSelect.active = true;
+        dragSelect.startX = pos.x;
+        dragSelect.startY = pos.y;
+        dragSelect.currentX = pos.x;
+        dragSelect.currentY = pos.y;
+        dragSelect.moved = false;
+        dragSelect.clickedUnitId = clickedPlayerUnit ? clickedPlayerUnit.id : null;
+
+        if (clickedPlayerUnit) {
+          if (event.shiftKey) {
+            toggleSelectedUnit(clickedPlayerUnit.id);
+            setStatus(gameState.selectedUnitIds.length + " units selected.");
+          } else {
+            gameState.selectedUnitIds = [clickedPlayerUnit.id];
+            setStatus(clickedPlayerUnit.kind + " selected.");
+          }
+          return;
+        }
+
+        if (!event.shiftKey) {
+          gameState.selectedUnitIds = [];
+        }
+      }
+
+      function handleCanvasMouseMove(event) {
+        if (!dragSelect.active) {
+          return;
+        }
+        const pos = toWorldPosition(event);
+        dragSelect.currentX = pos.x;
+        dragSelect.currentY = pos.y;
+        if (Math.abs(dragSelect.currentX - dragSelect.startX) > 4 || Math.abs(dragSelect.currentY - dragSelect.startY) > 4) {
+          dragSelect.moved = true;
+        }
+      }
+
+      function handleCanvasMouseUp(event) {
+        if (!dragSelect.active || event.button !== 0) {
+          return;
+        }
+
+        const pos = toWorldPosition(event);
+        dragSelect.currentX = pos.x;
+        dragSelect.currentY = pos.y;
+
+        if (dragSelect.moved) {
+          applyBoxSelection(event.shiftKey);
+        } else if (dragSelect.clickedUnitId == null) {
+          issueCommandToSelection(getSelectedUnits(), pos.x, pos.y);
+        }
+
+        dragSelect.active = false;
+      }
+
+      function updateHarvester(unit, dt, state) {
+        const base = unit.team === "player" ? state.playerBase : state.aiBase;
+        const capacity = 60;
+
+        if (unit.state === "return") {
+          const reachedBase = moveTowards(unit, base.x, base.y, dt, state);
+          if (reachedBase) {
+            const econ = unit.team === "player" ? state.playerEconomy : state.aiEconomy;
+            econ.water += unit.cargo.water;
+            econ.materials += unit.cargo.materials;
+            unit.cargo.water = 0;
+            unit.cargo.materials = 0;
+            const node = getNodeById(unit.targetId, state);
+            if (node && node.current > 1) {
+              unit.moveTarget = { x: node.x, y: node.y };
+              unit.state = "move";
+            } else {
+              unit.state = "idle";
+              unit.moveTarget = null;
+              unit.targetId = null;
+            }
+          }
+          return;
+        }
+
+        if (unit.state === "gather") {
+          const node = getNodeById(unit.targetId, state);
+          if (!node || node.current <= 0) {
+            unit.state = "return";
+            return;
+          }
+
+          const rawAmount = Math.min(20 * dt, node.current);
+          node.current -= rawAmount;
+          unit.cargo[node.type] += rawAmount;
+
+          if (unit.cargo.water + unit.cargo.materials >= capacity || node.current <= 0) {
+            unit.state = "return";
+          }
+          return;
+        }
+
+        if (unit.state === "move") {
+          if (!unit.moveTarget && unit.targetId) {
+            const node = getNodeById(unit.targetId, state);
+            if (node) {
+              unit.moveTarget = { x: node.x, y: node.y };
+            }
+          }
+          if (unit.moveTarget) {
+            const reached = moveTowards(unit, unit.moveTarget.x, unit.moveTarget.y, dt, state);
+            if (reached) {
+              const node = getNodeById(unit.targetId, state);
+              if (node && distance(unit.x, unit.y, node.x, node.y) <= 18) {
+                unit.state = "gather";
+                unit.moveTarget = null;
+              } else {
+                unit.state = "idle";
+                unit.moveTarget = null;
+              }
+            }
+          }
+          return;
+        }
+
+        unit.state = "idle";
+      }
+
+      function updateCombatUnit(unit, dt, state) {
+        const enemyTeam = unit.team === "player" ? "ai" : "player";
+        const enemyBase = unit.team === "player" ? state.aiBase : state.playerBase;
+
+        let nearestEnemy = null;
+        let nearestDist = Infinity;
+        for (const other of state.units) {
+          if (other.team !== enemyTeam) {
+            continue;
+          }
+          if (!canAttackTarget(unit, other)) {
+            continue;
+          }
+          const dist = distance(unit.x, unit.y, other.x, other.y);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestEnemy = other;
+          }
+        }
+
+        if (nearestEnemy && nearestDist <= unit.range) {
+          nearestEnemy.hp -= unit.damagePerSec * dt;
+          unit.state = "attack";
+          unit.attackTargetId = nearestEnemy.id;
+          return;
+        }
+
+        if (unit.kind !== "patrolBoat") {
+          const baseDistance = distance(unit.x, unit.y, enemyBase.x, enemyBase.y);
+          if (baseDistance <= unit.range + 6) {
+            enemyBase.hp -= unit.damagePerSec * dt;
+            unit.state = "attack";
+            unit.attackTargetId = enemyTeam === "ai" ? "player-base" : "enemy-base";
+            return;
+          }
+        }
+
+        if (unit.moveTarget) {
+          const reached = moveTowards(unit, unit.moveTarget.x, unit.moveTarget.y, dt, state);
+          if (reached) {
+            unit.moveTarget = null;
+            unit.state = "idle";
+          }
+          return;
+        }
+
+        if (unit.attackTargetId === "enemy-base" || unit.attackTargetId === "player-base") {
+          if (unit.kind === "patrolBoat") {
+            unit.state = "idle";
+          } else {
+            moveTowards(unit, enemyBase.x, enemyBase.y, dt, state);
+            unit.state = "attack";
+          }
+        } else {
+          unit.state = "idle";
+        }
+      }
+
+      function assignAiHarvester(unit, state) {
+        if (unit.state !== "idle") {
+          return;
+        }
+        const needsWater = state.aiEconomy.water < state.aiEconomy.materials;
+        const wantedType = needsWater ? "water" : "materials";
+
+        const candidate = state.nodes
+          .filter((node) => node.type === wantedType && node.current > 1)
+          .sort((a, b) => distance(unit.x, unit.y, a.x, a.y) - distance(unit.x, unit.y, b.x, b.y))[0];
+
+        if (!candidate) {
+          return;
+        }
+
+        unit.targetId = candidate.id;
+        unit.moveTarget = { x: candidate.x, y: candidate.y };
+        unit.state = "move";
+      }
+
+      function aiTryBuildUnit(kind, state) {
+        const cost = COSTS[kind];
+        if (!canAfford(state.aiEconomy, cost)) {
+          return false;
+        }
+        if (kind === "patrolBoat" && !citySupportsNavy(state)) {
+          return false;
+        }
+        spend(state.aiEconomy, cost);
+        const unit = spawnUnit("ai", kind, state);
+        if (kind === "harvester") {
+          assignAiHarvester(unit, state);
+        } else {
+          unit.state = "attack";
+          unit.attackTargetId = "player-base";
+        }
+        return true;
+      }
+
+      function updateAI(state) {
+        if (!state.running) {
+          return;
+        }
+
+        const settings = DIFFICULTIES[state.difficulty];
+        state.timers.aiThink += frameDtMs;
+        state.timers.aiAttack += frameDtMs;
+
+        if (state.timers.aiThink >= settings.aiThinkMs) {
+          state.timers.aiThink = 0;
+
+          for (const unit of state.units) {
+            if (unit.team === "ai" && unit.kind === "harvester") {
+              assignAiHarvester(unit, state);
+            }
+          }
+
+          const aiHarvesters = state.units.filter((u) => u.team === "ai" && u.kind === "harvester").length;
+          if (aiHarvesters < 4) {
+            aiTryBuildUnit("harvester", state);
+          }
+
+          const aiArmy = state.units.filter((u) => u.team === "ai" && (u.kind === "soldier" || u.kind === "tank")).length;
+          const aiAir = state.units.filter((u) => u.team === "ai" && u.kind === "helicopter").length;
+          const aiNavy = state.units.filter((u) => u.team === "ai" && u.kind === "patrolBoat").length;
+
+          if (aiArmy < 4) {
+            aiTryBuildUnit("soldier", state);
+          } else if (aiArmy < 8) {
+            aiTryBuildUnit("tank", state);
+          }
+
+          if (aiAir < 3) {
+            aiTryBuildUnit("helicopter", state);
+          }
+
+          if (citySupportsNavy(state) && aiNavy < 3) {
+            aiTryBuildUnit("patrolBoat", state);
+          }
+        }
+
+        if (state.timers.aiAttack >= settings.aiAttackMs) {
+          state.timers.aiAttack = 0;
+          for (const unit of state.units) {
+            if (unit.team !== "ai" || unit.kind === "harvester") {
+              continue;
+            }
+            unit.state = "attack";
+            unit.attackTargetId = "player-base";
+          }
         }
       }
 
       function update(dtMs) {
+        frameDtMs = dtMs;
         if (!gameState.running) {
           return;
         }
 
+        const dt = dtMs / 1000;
         gameState.timers.income += dtMs;
-        gameState.timers.aiSpawn += dtMs;
 
         while (gameState.timers.income >= INCOME_TICK_MS) {
-          gameState.playerResources += 10;
-          gameState.aiResources += gameState.difficulty.incomePerSec;
+          const bonus = DIFFICULTIES[gameState.difficulty].aiIncomeBonus;
+          gameState.aiEconomy.water += bonus;
+          gameState.aiEconomy.materials += bonus;
+          for (const node of gameState.nodes) {
+            node.current = Math.min(node.capacity, node.current + node.regenPerSec);
+          }
           gameState.timers.income -= INCOME_TICK_MS;
         }
 
-        while (gameState.timers.aiSpawn >= gameState.difficulty.aiSpawnMs) {
-          spawnAiUnit();
-          gameState.timers.aiSpawn -= gameState.difficulty.aiSpawnMs;
-        }
-
-        const dt = dtMs / 1000;
-        const remaining = [];
+        updateAI(gameState);
 
         for (const unit of gameState.units) {
-          const targetBase = unit.target === "aiBase" ? gameState.aiBase : gameState.playerBase;
-          const dist = distance(unit, targetBase);
-
-          if (dist <= BASE_COLLISION_RADIUS) {
-            targetBase.hp -= unit.damage;
+          if (unit.kind === "harvester") {
+            updateHarvester(unit, dt, gameState);
           } else {
-            const dx = targetBase.x - unit.x;
-            const dy = targetBase.y - unit.y;
-            const step = unit.speed * dt;
-            const nx = dx / (dist || 1);
-            const ny = dy / (dist || 1);
-            unit.x += nx * step;
-            unit.y += ny * step;
-            remaining.push(unit);
+            updateCombatUnit(unit, dt, gameState);
           }
         }
 
-        gameState.units = remaining;
+        gameState.units = gameState.units.filter((unit) => unit.hp > 0);
 
-        if (gameState.aiBase.hp <= 0) {
-          gameState.aiBase.hp = 0;
-          endGame("victory");
-        } else if (gameState.playerBase.hp <= 0) {
+        if (gameState.playerBase.hp <= 0) {
           gameState.playerBase.hp = 0;
-          endGame("defeat");
+          gameState.running = false;
+          gameState.result = "defeat";
+          setStatus("Defeat: your HQ has been destroyed.");
+        } else if (gameState.aiBase.hp <= 0) {
+          gameState.aiBase.hp = 0;
+          gameState.running = false;
+          gameState.result = "victory";
+          setStatus("Victory: enemy HQ destroyed.");
         }
       }
 
-      function drawBase(base, color, name) {
-        const width = 60;
-        const height = 60;
+      function drawBase(base, color, label) {
+        ctx.beginPath();
         ctx.fillStyle = color;
-        ctx.fillRect(base.x - width / 2, base.y - height / 2, width, height);
+        ctx.arc(base.x, base.y, BASE_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
 
-        ctx.fillStyle = "#d9e8f5";
+        ctx.fillStyle = "#eaf2fa";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(name, base.x, base.y - 40);
+        ctx.fillText(label, base.x, base.y - BASE_RADIUS - 12);
 
-        const barWidth = 70;
+        const barWidth = 88;
         const hpPct = Math.max(0, base.hp / base.maxHp);
-        ctx.fillStyle = "#3b4a5a";
-        ctx.fillRect(base.x - barWidth / 2, base.y + 40, barWidth, 7);
-        ctx.fillStyle = "#58d68d";
-        ctx.fillRect(base.x - barWidth / 2, base.y + 40, barWidth * hpPct, 7);
+        ctx.fillStyle = "#3a4755";
+        ctx.fillRect(base.x - barWidth / 2, base.y + BASE_RADIUS + 8, barWidth, 7);
+        ctx.fillStyle = "#68d391";
+        ctx.fillRect(base.x - barWidth / 2, base.y + BASE_RADIUS + 8, barWidth * hpPct, 7);
       }
 
-      function drawUnits(units) {
-        for (const unit of units) {
+      function drawNodes() {
+        for (const node of gameState.nodes) {
+          const r = 12;
+          const pct = node.current / node.capacity;
           ctx.beginPath();
-          ctx.fillStyle = unit.team === "player" ? "#5dade2" : "#ec7063";
-          ctx.arc(unit.x, unit.y, unit.radius, 0, Math.PI * 2);
+          ctx.fillStyle = node.type === "water" ? "#4fc3f7" : "#d4a15a";
+          ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
           ctx.fill();
-        }
-      }
 
-      function drawBackground() {
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        ctx.fillStyle = "#142638";
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-        ctx.strokeStyle = "rgba(200, 220, 240, 0.08)";
-        for (let x = 0; x <= CANVAS_WIDTH; x += 45) {
+          ctx.strokeStyle = "rgba(255,255,255,0.45)";
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, CANVAS_HEIGHT);
+          ctx.arc(node.x, node.y, r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
           ctx.stroke();
         }
-        for (let y = 0; y <= CANVAS_HEIGHT; y += 45) {
+      }
+
+      function drawUnits() {
+        const selectedSet = new Set(gameState.selectedUnitIds || []);
+        for (const unit of gameState.units) {
+          const def = UNIT_DEFS[unit.kind];
+          ctx.beginPath();
+          ctx.fillStyle = unit.team === "player" ? def.colorPlayer : def.colorAI;
+          ctx.arc(unit.x, unit.y, unit.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (unit.kind === "tank") {
+            ctx.fillStyle = "rgba(15, 25, 34, 0.65)";
+            ctx.fillRect(unit.x - 5, unit.y - 2, 10, 4);
+          }
+
+          if (unit.kind === "helicopter") {
+            ctx.strokeStyle = "rgba(240, 248, 255, 0.8)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(unit.x - 8, unit.y - 7);
+            ctx.lineTo(unit.x + 8, unit.y - 7);
+            ctx.stroke();
+          }
+
+          if (selectedSet.has(unit.id)) {
+            ctx.strokeStyle = "#fff28a";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(unit.x, unit.y, unit.radius + 4, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      }
+
+      function drawSelectionBox() {
+        if (!dragSelect.active || !dragSelect.moved) {
+          return;
+        }
+        const minX = Math.min(dragSelect.startX, dragSelect.currentX);
+        const minY = Math.min(dragSelect.startY, dragSelect.currentY);
+        const width = Math.abs(dragSelect.currentX - dragSelect.startX);
+        const height = Math.abs(dragSelect.currentY - dragSelect.startY);
+        ctx.fillStyle = "rgba(255, 242, 138, 0.16)";
+        ctx.strokeStyle = "rgba(255, 242, 138, 0.9)";
+        ctx.lineWidth = 1;
+        ctx.fillRect(minX, minY, width, height);
+        ctx.strokeRect(minX, minY, width, height);
+      }
+
+      function drawMapBackground() {
+        const theme = gameState.city.theme;
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = theme.bg;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        for (const overlay of gameState.city.overlays) {
+          if (overlay.kind === "coast") {
+            ctx.fillStyle = theme.coast;
+            ctx.beginPath();
+            ctx.moveTo(overlay.points[0].x, overlay.points[0].y);
+            for (let i = 1; i < overlay.points.length; i += 1) {
+              ctx.lineTo(overlay.points[i].x, overlay.points[i].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+
+        ctx.strokeStyle = theme.grid;
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= WIDTH; x += 48) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, HEIGHT);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= HEIGHT; y += 48) {
           ctx.beginPath();
           ctx.moveTo(0, y);
-          ctx.lineTo(CANVAS_WIDTH, y);
+          ctx.lineTo(WIDTH, y);
           ctx.stroke();
         }
       }
 
       function render() {
-        drawBackground();
-        drawBase(gameState.playerBase, "#2e86c1", "Your HQ");
-        drawBase(gameState.aiBase, "#cb4335", "Enemy HQ");
-        drawUnits(gameState.units);
+        drawMapBackground();
+        drawNodes();
+        drawBase(gameState.playerBase, "#3498db", "Your HQ");
+        drawBase(gameState.aiBase, "#dd5a5a", "Enemy HQ");
+        drawUnits();
+        drawSelectionBox();
 
-        resourcesEl.textContent = gameState.playerResources;
-        spawnButton.disabled = !gameState.running;
-        difficultySelect.disabled = !gameState.running;
+        const myUnits = gameState.units.filter((u) => u.team === "player");
+        const armyCount = myUnits.filter((u) => u.kind === "soldier" || u.kind === "tank").length;
+        const airCount = myUnits.filter((u) => u.kind === "helicopter").length;
+        const navyCount = myUnits.filter((u) => u.kind === "patrolBoat").length;
+
+        waterEl.textContent = Math.floor(gameState.playerEconomy.water);
+        materialsEl.textContent = Math.floor(gameState.playerEconomy.materials);
+        playerHpEl.textContent = Math.floor(gameState.playerBase.hp);
+        aiHpEl.textContent = Math.floor(gameState.aiBase.hp);
+        armyCountEl.textContent = String(armyCount);
+        airCountEl.textContent = String(airCount);
+        navyCountEl.textContent = String(navyCount);
+
+        const active = gameState.running;
+        spawnHarvesterEl.disabled = !active;
+        spawnSoldierEl.disabled = !active;
+        spawnTankEl.disabled = !active;
+        spawnHelicopterEl.disabled = !active;
+        spawnBoatEl.disabled = !active || !citySupportsNavy();
       }
+
+      function handleSpawn(kind) {
+        if (!gameState.running) {
+          return;
+        }
+        if (kind === "patrolBoat" && !citySupportsNavy()) {
+          setStatus("Patrol boats are unavailable in this inland city theater.");
+          return;
+        }
+        const cost = COSTS[kind];
+        if (!canAfford(gameState.playerEconomy, cost)) {
+          setStatus("Not enough resources for " + kind + ".");
+          return;
+        }
+
+        spend(gameState.playerEconomy, cost);
+        const unit = spawnUnit("player", kind);
+
+        if (kind === "harvester") {
+          const nearestWater = gameState.nodes
+            .filter((node) => node.type === "water")
+            .sort((a, b) => distance(unit.x, unit.y, a.x, a.y) - distance(unit.x, unit.y, b.x, b.y))[0];
+          if (nearestWater) {
+            unit.targetId = nearestWater.id;
+            unit.moveTarget = { x: nearestWater.x, y: nearestWater.y };
+            unit.state = "move";
+          }
+        }
+      }
+
+      function restart() {
+        gameState = createState();
+        setStatus("City theater initialized. Build economy, expand Army/Air Force/Navy, then strike enemy HQ.");
+      }
+
+      spawnHarvesterEl.addEventListener("click", () => handleSpawn("harvester"));
+      spawnSoldierEl.addEventListener("click", () => handleSpawn("soldier"));
+      spawnTankEl.addEventListener("click", () => handleSpawn("tank"));
+      spawnHelicopterEl.addEventListener("click", () => handleSpawn("helicopter"));
+      spawnBoatEl.addEventListener("click", () => handleSpawn("patrolBoat"));
+      restartEl.addEventListener("click", restart);
+      difficultyEl.addEventListener("change", restart);
+      cityEl.addEventListener("change", restart);
+      canvas.addEventListener("mousedown", handleCanvasMouseDown);
+      canvas.addEventListener("mousemove", handleCanvasMouseMove);
+      canvas.addEventListener("mouseup", handleCanvasMouseUp);
+      canvas.addEventListener("mouseleave", () => {
+        dragSelect.active = false;
+      });
+      canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
       let previous = performance.now();
       function loop(now) {
-        const dtMs = Math.min(50, now - previous);
+        const dtMs = Math.min(40, now - previous);
         previous = now;
         update(dtMs);
         render();
         requestAnimationFrame(loop);
       }
 
-      spawnButton.addEventListener("click", spawnPlayerUnit);
-
-      restartButton.addEventListener("click", () => {
-        gameState = createInitialState();
-        setStatus("");
-      });
-
-      difficultySelect.addEventListener("change", () => {
-        gameState.difficulty = DIFFICULTIES[difficultySelect.value] || DIFFICULTIES.medium;
-      });
-
-      setStatus("Build units and destroy the enemy HQ.");
-      requestAnimationFrame((now) => {
-        previous = now;
+      restart();
+      requestAnimationFrame((t) => {
+        previous = t;
         requestAnimationFrame(loop);
       });
     </script>
